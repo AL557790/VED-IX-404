@@ -18,10 +18,10 @@ import aiohttp
 # الإعدادات المباشرة (بدون .env)
 # ═══════════════════════════════════════════════════════════
 
-TOKEN = "8765969078:AAF0n0KlZ4ids7pTeDpAOlulsfaM1E-k1SI"  # ← ضع توكنك هنا
-PORT = 10000  # ← منفذ Flask
-API_URL = "http://raw.thug4ff.xyz/info"  # ← API Free Fire
-GENERATE_URL = "http://profile.thug4ff.xyz/api/profile"  # ← API الصور
+TOKEN = "8765969078:AAF0n0KlZ4ids7pTeDpAOlulsfaM1E-k1SI"
+PORT = 10000
+API_URL = "http://raw.thug4ff.xyz/info"
+GENERATE_URL = "http://profile.thug4ff.xyz/api/profile"
 CONFIG_FILE = "info_channels.json"
 
 # ═══════════════════════════════════════════════════════════
@@ -49,23 +49,17 @@ class FreeFireBot:
         self.config_data = self.load_config()
         self.cooldowns: Dict[int, datetime] = {}
         
-        # تسجيل المعالجات
         self._register_handlers()
     
     def _register_handlers(self):
         """تسجيل جميع الأوامر"""
-        # الأوامر الأساسية
         self.application.add_handler(CommandHandler("start", self.cmd_start))
         self.application.add_handler(CommandHandler("help", self.cmd_help))
         self.application.add_handler(CommandHandler("ping", self.cmd_ping))
-        
-        # أوامر Free Fire
         self.application.add_handler(CommandHandler("info", self.player_info))
         self.application.add_handler(CommandHandler("infochannels", self.list_info_channels))
         self.application.add_handler(CommandHandler("setinfochannel", self.set_info_channel))
         self.application.add_handler(CommandHandler("removeinfochannel", self.remove_info_channel))
-        
-        # معالج الأخطاء
         self.application.add_error_handler(self.error_handler)
 
     def convert_unix_timestamp(self, timestamp) -> str:
@@ -132,10 +126,6 @@ class FreeFireBot:
             print(f"Error checking admin: {e}")
             return False
 
-    # ═══════════════════════════════════════════════════════
-    # الأوامر الأساسية
-    # ═══════════════════════════════════════════════════════
-
     async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """بدء البوت"""
         welcome_text = f"""
@@ -183,10 +173,6 @@ class FreeFireBot:
         msg = await update.message.reply_text("🏓 Pong!")
         ping = round((time.time() - start) * 1000, 2)
         await msg.edit_text(f"🏓 **Pong!** `{ping}ms`", parse_mode='Markdown')
-
-    # ═══════════════════════════════════════════════════════
-    # أوامر إدارة القنوات
-    # ═══════════════════════════════════════════════════════
 
     async def set_info_channel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """تفعيل البوت في الدردشة"""
@@ -236,20 +222,14 @@ class FreeFireBot:
         
         await update.message.reply_text("📋 **الحالة:** السماح للجميع")
 
-    # ═══════════════════════════════════════════════════════
-    # أمر info الرئيسي
-    # ═══════════════════════════════════════════════════════
-
     async def player_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """جلب معلومات اللاعب"""
         chat_id = update.effective_chat.id
         user_id = update.effective_user.id
         
-        # التحقق من القناة
         if not self.is_channel_allowed(chat_id):
             return await update.message.reply_text("❌ غير مسموح هنا")
         
-        # التحقق من UID
         if not context.args or len(context.args) < 1:
             return await update.message.reply_text(
                 "⚠️ **الاستخدام:** `/info <UID>`\n\nمثال: `/info 123456789`",
@@ -264,7 +244,6 @@ class FreeFireBot:
                 parse_mode='Markdown'
             )
         
-        # التحقق من الانتظار
         cooldown = self.config_data["global_settings"]["default_cooldown"]
         chat_id_str = str(chat_id)
         if chat_id_str in self.config_data["servers"]:
@@ -277,11 +256,13 @@ class FreeFireBot:
         
         self.cooldowns[user_id] = datetime.now()
         
-        # جلب البيانات
         processing_msg = await update.message.reply_text("🔍 جاري البحث...")
         
         try:
-            async with self.session.get(f"{API_URL}?uid={uid}&key=great") as}?uid={uid}&key=great") as resp:
+            # ═══════════════════════════════════════════════════
+            # هنا كان الخطأ - تم إصلاحه
+            # ═══════════════════════════════════════════════════
+            async with self.session.get(f"{API_URL}?uid={uid}&key=great") as resp:
                 if resp.status == 404:
                     await processing_msg.delete()
                     return await self._send_not_found(update, uid)
@@ -291,7 +272,6 @@ class FreeFireBot:
                 
                 data = await resp.json()
             
-            # استخراج البيانات
             basic = data.get('basicInfo', {})
             captain = data.get('captainBasicInfo', {})
             clan = data.get('clanBasicInfo', {})
@@ -302,13 +282,11 @@ class FreeFireBot:
             
             region = basic.get('region', 'غير موجود')
             
-            # بناء الرسالة
             msg = self._build_message(uid, basic, captain, clan, credit, pet, profile, social, region)
             
             await processing_msg.delete()
             await update.message.reply_text(msg, parse_mode='Markdown')
             
-            # إرسال الصورة
             await self._send_profile_image(update, uid, region)
             
         except Exception as e:
@@ -417,10 +395,6 @@ UID `{uid}` غير موجود.
         if isinstance(update, Update) and update.effective_message:
             await update.effective_message.reply_text("❌ حدث خطأ غير متوقع")
 
-    # ═══════════════════════════════════════════════════════
-    # تشغيل البوت
-    # ═══════════════════════════════════════════════════════
-
     async def on_startup(self, app: Application):
         """عند بدء التشغيل"""
         global bot_name
@@ -430,12 +404,10 @@ UID `{uid}` غير موجود.
         print(f"\n✅ Bot started: @{bot_name}")
         print(f"🆔 ID: {me.id}")
         
-        # تشغيل Flask في Thread منفصل
         flask_thread = threading.Thread(target=run_flask, daemon=True)
         flask_thread.start()
         print(f"🌐 Flask running on port {PORT}")
         
-        # تعيين أوامر القائمة
         await app.bot.set_my_commands([
             BotCommand("start", "بدء البوت"),
             BotCommand("help", "المساعدة"),
@@ -459,10 +431,6 @@ UID `{uid}` غير موجود.
         print("🚀 Starting bot...")
         self.application.run_polling(drop_pending_updates=True)
 
-
-# ═══════════════════════════════════════════════════════════
-# نقطة البداية
-# ═══════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     bot = FreeFireBot()
