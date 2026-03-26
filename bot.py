@@ -7,7 +7,7 @@ import asyncio
 import threading
 import traceback
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 from telegram import Update, InputFile, BotCommand
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -45,7 +45,7 @@ def run_flask():
 class FreeFireBot:
     def __init__(self):
         self.application = Application.builder().token(TOKEN).build()
-        self.session = aiohttp.ClientSession()
+        self.session: Optional[aiohttp.ClientSession] = None  # ← لا ننشئه هنا
         self.config_data = self.load_config()
         self.cooldowns: Dict[int, datetime] = {}
         
@@ -259,9 +259,6 @@ class FreeFireBot:
         processing_msg = await update.message.reply_text("🔍 جاري البحث...")
         
         try:
-            # ═══════════════════════════════════════════════════
-            # هنا كان الخطأ - تم إصلاحه
-            # ═══════════════════════════════════════════════════
             async with self.session.get(f"{API_URL}?uid={uid}&key=great") as resp:
                 if resp.status == 404:
                     await processing_msg.delete()
@@ -395,19 +392,29 @@ UID `{uid}` غير موجود.
         if isinstance(update, Update) and update.effective_message:
             await update.effective_message.reply_text("❌ حدث خطأ غير متوقع")
 
+    # ═══════════════════════════════════════════════════════
+    # تشغيل البوت - تم التعديل هنا
+    # ═══════════════════════════════════════════════════════
+
     async def on_startup(self, app: Application):
-        """عند بدء التشغيل"""
+        """عند بدء التشغيل - ننشئ الـ session هنا"""
         global bot_name
+        
+        # ← إنشاء الـ session هنا حيث يوجد event loop
+        self.session = aiohttp.ClientSession()
+        
         me = await app.bot.get_me()
         bot_name = me.username
         
         print(f"\n✅ Bot started: @{bot_name}")
         print(f"🆔 ID: {me.id}")
         
+        # تشغيل Flask
         flask_thread = threading.Thread(target=run_flask, daemon=True)
         flask_thread.start()
         print(f"🌐 Flask running on port {PORT}")
         
+        # تعيين الأوامر
         await app.bot.set_my_commands([
             BotCommand("start", "بدء البوت"),
             BotCommand("help", "المساعدة"),
@@ -420,7 +427,8 @@ UID `{uid}` غير موجود.
 
     async def on_shutdown(self, app: Application):
         """عند الإيقاف"""
-        await self.session.close()
+        if self.session:
+            await self.session.close()
         print("👋 Bot stopped")
 
     def run(self):
